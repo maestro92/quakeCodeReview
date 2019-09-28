@@ -36,6 +36,113 @@ The server then reconstruct a command from the same buffer using NET_GetLoopPack
 
 
 
+1.  first thing is that we start from the platform layer. here we look at how it is run on windows
+
+as you can see, this is exactly like what handmade hero does. So Thank you Casey.
+
+we first call initialize our game by calling Qcommon_Init(); and then we go into our game loop,
+which we call Qcommon_Frame();
+
+you can also see abunch of windows API calls, using the event message queue. I am not familiar with it,
+but I have only heard really bad stuff about that API.
+
+
+                sys_win.c 
+
+
+                HINSTANCE   global_hInstance;
+
+                int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+                {
+
+                    ParseCommandLine (lpCmdLine);
+
+                    ...
+                    ...
+
+                    Qcommon_Init (argc, argv);
+                    oldtime = Sys_Milliseconds ();
+
+                    /* main window message loop */
+                    while (1)
+                    {
+                        // if at a full screen console, don't update unless needed
+                        if (Minimized || (dedicated && dedicated->value) )
+                        {
+                            Sleep (1);
+                        }
+
+                        while (PeekMessage (&msg, NULL, 0, 0, PM_NOREMOVE))
+                        {
+                            if (!GetMessage (&msg, NULL, 0, 0))
+                                Com_Quit ();
+                            sys_msg_time = msg.time;
+                            TranslateMessage (&msg);
+                            DispatchMessage (&msg);
+                        }
+
+                        do
+                        {
+                            newtime = Sys_Milliseconds ();
+                            time = newtime - oldtime;
+                        } while (time < 1);
+                //          Con_Printf ("time:%5.2f - %5.2f = %5.2f\n", newtime, oldtime, time);
+
+                        //  _controlfp( ~( _EM_ZERODIVIDE /*| _EM_INVALID*/ ), _MCW_EM );
+                        _controlfp( _PC_24, _MCW_PC );
+                        Qcommon_Frame (time);
+
+                        oldtime = newtime;
+                    }
+
+                    // never gets here
+                    return TRUE;
+                }
+
+
+
+2.  lets look at how Qcommon_Init(); is done
+
+as mentioned Qcommon_Init(); is called by both Client and Server, essentially, "quake common", a shared function
+since we are only looking at game logic, i will only highlight game logic related functions();
+
+                common.c
+
+                void Qcommon_Init (int argc, char **argv)
+                {
+                    ...
+                    ...
+
+                    Sys_Init ();
+
+                    NET_Init ();
+                    Netchan_Init ();
+
+                    SV_Init ();
+                    CL_Init ();
+
+                    ...
+                    ...
+                }
+
+
+of course, we are mostly interested in SV_Init(); and CL_Init();
+
+
+
+
+
+
+
+
+###################################################################################
+############################### Server Initalization ##############################
+###################################################################################
+
+3. lets check out what is SV_Init(); 
+
+
+
 
 
 

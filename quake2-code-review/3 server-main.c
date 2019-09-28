@@ -1,65 +1,214 @@
 
 
+###################################################################################
+############################### Server Initalization ##############################
+###################################################################################
 
-###############################################################
-######################### Server Init #########################
-###############################################################
+1.  lets check out what is SV_Init(); that is defined in sv_main.c 
+    once the server is setup, we tell it to load into a game 
 
-            
+    we tell the server which map it wants, then it we tell it to initalize the game 
 
-1.          
+                sv_main.c
 
-            sv_main.c
+                void SV_Init (void)
+                {
+                    SV_InitOperatorCommands ();
 
-            SV_Init()
-            {
-
-            }            
-
-
+                    ...
+                    ...
+                }
 
 2.              
+                sv_ccmds.c
 
-            sv_ccmds.c
+                SV_InitOperatorCommands()
+                {
 
-            SV_InitOperatorCommands()
-            {
+                    ...
+                    Cmd_AddCommand ("map", SV_Map_f);
+                    ...
 
-                ...
-                Cmd_AddCommand ("map", SV_Map_f);
-                ...
-
-            }
-
+                }
 
 
-3.          sv_ccmds.c
 
-            void SV_GameMap_f(void )
-            {
+3.          
+                sv_ccmds.c
 
-                ...
-                // start up the next map
-                SV_Map (false, Cmd_Argv(1), false );
-                
-                ...
-                ...
-            }
+                void SV_GameMap_f(void )
+                {
+
+                    ...
+                    // start up the next map
+                    SV_Map (false, Cmd_Argv(1), false );
+                    
+                    ...
+                    ...
+                }
 
 
 
 4.  
-            sv_ccmds.c
+                sv_ccmds.c
 
-            void SV_Map()
-            {
-                
-                ...
+                void SV_Map()
+                {
+                    
+                    ...
 
 
-                if (sv.state == ss_dead && !sv.loadgame)
-                    SV_InitGame (); // the game is just starting
-            }
+                    if (sv.state == ss_dead && !sv.loadgame)
+                        SV_InitGame (); // the game is just starting
+                }
+
+
+
+
+5.  and here we are, where the server initializes the game 
+
+regarding what is edict_t, please refer to "4 entity.c". Its essentially a definition for entities in quake2
+
+-   first you can see it allocates memory for a bunch of game clients/players 
+
+-   notice the macro EDICT_NUM,
+
+                #define EDICT_NUM(n) ((edict_t *)((byte *)ge->edicts + ge->edict_size*(n)))
+    
+    it actually returns the edict_t by index, (n here is effectively index)
+
+
+-   the we call SV_InitGameProgs();
+
+                sv_init.c 
+
+                void SV_InitGame (void)
+                {
+                    int     i;
+                    edict_t *ent;
+                    
+                    ...
+                    ...
+
+
+                    svs.spawncount = rand();
+                    svs.clients = Z_Malloc (sizeof(client_t)*maxclients->value);
+                    svs.num_client_entities = maxclients->value*UPDATE_BACKUP*64;
+                    svs.client_entities = Z_Malloc (sizeof(entity_state_t)*svs.num_client_entities);
+
+                    ...
+                    ...
+
+                    // init game
+    ----------->    SV_InitGameProgs ();
+                    for (i=0 ; i<maxclients->value ; i++)
+                    {
+                        ent = EDICT_NUM(i+1);
+                        ent->s.number = i+1;
+                        svs.clients[i].edict = ent;
+                        memset (&svs.clients[i].lastcmd, 0, sizeof(svs.clients[i].lastcmd));
+                    }
+                }
+
+
+
+
+6.  now we are stepping into server game code territory. ge refers to gameExport 
+    here you can see that we are loading a new game.dll    
+
+    recall we mentioned in the "game dll.c" article 
+
+                sv_game.c
+
+                void SV_InitGameProgs (void)
+                {
+                    game_import_t   import;
+
+                    // unload anything we have now
+                    if (ge)
+                        SV_ShutdownGameProgs ();
+
+
+                    // load a new game dll
+                    import.multicast = SV_Multicast;
+                    import.unicast = PF_Unicast;
+                    import.bprintf = SV_BroadcastPrintf;
+                    import.dprintf = PF_dprintf;
+                    import.cprintf = PF_cprintf;
+                    import.centerprintf = PF_centerprintf;
+                    import.error = PF_error;
+
+                    import.linkentity = SV_LinkEdict;
+                    import.unlinkentity = SV_UnlinkEdict;
+                    import.BoxEdicts = SV_AreaEdicts;
+                    import.trace = SV_Trace;
+                    import.pointcontents = SV_PointContents;
+                    import.setmodel = PF_setmodel;
+                    import.inPVS = PF_inPVS;
+                    import.inPHS = PF_inPHS;
+                    import.Pmove = Pmove;
+
+                    import.modelindex = SV_ModelIndex;
+                    import.soundindex = SV_SoundIndex;
+                    import.imageindex = SV_ImageIndex;
+
+                    import.configstring = PF_Configstring;
+                    import.sound = PF_StartSound;
+                    import.positioned_sound = SV_StartSound;
+
+                    ...
+
+                    import.TagMalloc = Z_TagMalloc;
+                    import.TagFree = Z_Free;
+                    import.FreeTags = Z_FreeTags;
+
+                    ...
+                    ...
+
+                    ge = (game_export_t *)Sys_GetGameAPI (&import);
+
+                    if (!ge)
+                        Com_Error (ERR_DROP, "failed to load game DLL");
+                    if (ge->apiversion != GAME_API_VERSION)
+                        Com_Error (ERR_DROP, "game is version %i, not %i", ge->apiversion,
+                        GAME_API_VERSION);
+
+                    ge->Init ();
+                }
+
+
+
+
+
+7.   as you can see, this is just allocating the memory for all entites on the server side 
+
+                g_save.c
+
+                void InitGame (void)
+                {
+
+                    ...
+                    ...
+
+                    // initialize all entities for this game
+                    game.maxentities = maxentities->value;
+                    g_edicts =  gi.TagMalloc (game.maxentities * sizeof(g_edicts[0]), TAG_GAME);
+                    globals.edicts = g_edicts;
+                    globals.max_edicts = game.maxentities;
+
+                    // initialize all clients for this game
+                    game.maxclients = maxclients->value;
+                    game.clients = gi.TagMalloc (game.maxclients * sizeof(game.clients[0]), TAG_GAME);
+                    globals.num_edicts = game.maxclients+1;
+                }
+
+g_edicts is the entity array on the server, and we set globals.edicts = g_edicts
+
+
+
+
+
+
 
 
 5.  
@@ -140,42 +289,6 @@ before I delve further in, I want to point out the server_static_t class
 
 
 
-
-6.          
-
-                sv_game.c
-
-                void SV_InitGameProgs()
-                {
-                    ...
-                    ...
-
-                    ge->Init();
-                }
-
-
-
-
-
-                g_save.c
-
-                void InitGame(void)
-                {
-
-                    ...
-                    ...
-
-                    // initialize all entities for this game
-                    game.maxentities = maxentities->value;
-                    g_edicts =  gi.TagMalloc (game.maxentities * sizeof(g_edicts[0]), TAG_GAME);
-                    globals.edicts = g_edicts;
-                    globals.max_edicts = game.maxentities;
-
-                    // initialize all clients for this game
-                    game.maxclients = maxclients->value;
-                    game.clients = gi.TagMalloc (game.maxclients * sizeof(game.clients[0]), TAG_GAME);
-                    globals.num_edicts = game.maxclients+1;
-                }
 
 
 
@@ -415,11 +528,6 @@ and modify all the entities in the world.
 
 
                 }
-
-
-
-
-
 
 
 

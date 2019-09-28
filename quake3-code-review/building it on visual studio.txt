@@ -1,0 +1,18 @@
+1.	pretty much do whatever this guy mentioned in this post
+
+no need to do the change the "Working Directory" part
+
+http://gamedev.stackexchange.com/questions/13566/cannot-run-quake-3-engine-compiled-from-source-code
+
+In VS 2008, 2010, 2012, 2013 or 2015, right-click the project, choose properties, go to the Debugging section -- there is a box for "Command Arguments".
+
+2.	make sure u get the art assets from the your actual steam quake3 folder
+	probably gonna be in "Program Files (or Program Files x86?) /Steam/steamapps/common/Quake 3 Arena/baseq3"
+	move that folder to the folder is gonna be called baseq3. Move that to quake-III-Arena-master/code/
+
+
+
+
+
+
+
